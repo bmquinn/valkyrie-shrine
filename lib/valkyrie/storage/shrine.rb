@@ -98,6 +98,26 @@ module Valkyrie
         id.to_s.start_with?(protocol_with_prefix)
       end
 
+      # Verify the object tag in S3 associated with the given identifier matches the calculated checksum.
+      # @param id [Valkyrie::ID]
+      def verify_against_object_tag?(id:)
+        return false unless verifier
+
+        computed_md5_tag = shrine.client.get_object_tagging(
+          bucket: shrine.bucket.name,
+          key: [identifier_prefix, shrine_id_for(id)].join("/")
+        ).tag_set.find { |tag| tag[:key] == "computed-md5" }&.value
+
+        return false unless computed_md5_tag
+
+        file = find_by(id: id)
+        calculated_checksum = verifier.calculate_checksum(file).to_s
+
+        return false unless calculated_checksum
+
+        computed_md5_tag == calculated_checksum
+      end
+
       # Delete the file in S3 associated with the given identifier.
       # @param id [Valkyrie::ID]
       def delete(id:)
